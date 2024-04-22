@@ -5,6 +5,7 @@ import RegionFinder
 import pickle
 import pandas as pd
 import random
+import requests
 
 app=Flask(__name__)
 
@@ -17,6 +18,24 @@ def getRegionFromAddress(address):
         # print(locationCoordinates)
         # print(RegionFinder.findRegion(locationCoordinates))
         return RegionFinder.findRegion(locationCoordinates)
+
+def getAddressDetails(address):
+    geolocation=Nominatim(user_agent="example")
+    location=geolocation.geocode(address)
+    if location:
+        addressDetails={'latitude':location.latitude,'longitude':location.longitude}
+        requestBody={'group_id':"-1558704",'lat':addressDetails['latitude'],'lng':addressDetails['longitude']}
+        response=requests.post("https://www.zumper.com/api/x/1/location_scores",requestBody)
+        if response.status_code==200:
+            scoreResponse=response.json()
+            # Extract the transit score and walk score values
+            addressDetails['transitScore'] = round(scoreResponse["scores_json"]["transit_friendly"]["value"])*2
+            addressDetails['walkScore'] = round(scoreResponse["scores_json"]["pedestrian_friendly"]["value"]*10*2)
+        else:
+            addressDetails['transitScore']=round(random.uniform(1,11))
+            addressDetails['walkScore']=round(random.uniform(1,101))
+        return addressDetails
+            
 
 @app.route('/rental/getCompetitorRates', methods=['GET'])
 def getCompetitorRates():
@@ -63,6 +82,7 @@ def getCompetitorRates():
 @app.route('/rental/getPredictedRent', methods=['POST'])
 def getPredictedRent():
     data=request.json
+    addressDetails=getAddressDetails(data['address'])
     mlModelRequest={'CONDO_OR_RENTAL':data.get('condo_or_rental','Rental'),
                     'DISTRICT_REGION':data['region'] if 'region' in data else abort(400, description='region is not provided'),
                     'PARKING_TYPE':data.get('parking_type'),
@@ -71,11 +91,11 @@ def getPredictedRent():
                     'BEDS':data['beds'] if 'beds' in data else abort(400, description='beds is not provided'),
                     'RETAIL_SQUARE_FOOTAGE':data['size_sqft'] if 'size_sqft' in data else abort(400, description='size_sqft is not provided'),
                     'PRICE_PER_SQ_FT':data['price_per_sqft'] if 'price_per_sqft' in data else abort(400, description='price_per_sqft is not provided'),
-                    'TRANSIT_SCORE':data['transit_score'] if 'transit_score' in data else abort(400, description='transit_score is not provided'),
-                    'LATITUDE':data.get('latitude'),
-                    'LONGITUDE':data.get('longitude'),
+                    'TRANSIT_SCORE':addressDetails['transitScore'],
+                    'LATITUDE':addressDetails['latitude'],
+                    'LONGITUDE':addressDetails['longitude'],
                     'BATHS':data.get('baths',1),
-                    'WALK_SCORE':data['walk_score'] if 'walk_score' in data else abort(400, description='walk_score is not provided'),
+                    'WALK_SCORE':addressDetails['walkScore'],
                     'NO_OF_UTILITIES':data['no_of_utilities'] if 'no_of_utilities' in data else abort(400, description='no_of_utilities is not provided'),
                     'NO_OF_AMENITIES':data['no_of_amenities'] if 'no_of_amenities' in data else abort(400, description='no_of_amenities is not provided')}
     # Loading the trained ML Model in clf
