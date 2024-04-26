@@ -36,5 +36,3 @@ A key component of our project is the web application, which allows users to inp
 - **Royston Furtado** (A00477591)
 
 Our team brings together diverse expertise in data analysis, machine learning, and web development, ensuring a robust and user-friendly solution.
-
-## Repository Structure
